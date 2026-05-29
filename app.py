@@ -1,100 +1,59 @@
-import os
 import streamlit as st
+import tensorflow as tf
 import numpy as np
 from PIL import Image
-import tensorflow as tf
 from huggingface_hub import hf_hub_download
 
-# ─────────────────────────────────────────────
-# PAGE CONFIG
-# ─────────────────────────────────────────────
-st.set_page_config(
-    page_title="Brain Tumor Classifier",
-    page_icon="🧠",
-    layout="centered"
-)
+st.set_page_config(page_title="Brain Tumor Detector 🧠", layout="centered")
 
-# ─────────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────────
-CLASS_NAMES = ["glioma", "meningioma", "notumor", "pituitary"]
-IMG_SIZE = 224
-
-# 👉 CHANGE THIS TO YOUR HF MODEL REPO
+# 🔗 HF model info
 HF_MODEL_REPO = "inosukeo1/vg16_tumor"
-HF_MODEL_FILE = "mobile_model.keras"
+HF_MODEL_FILE = "mobile_model.keras"   # IMPORTANT: match your repo file name
 
-# ─────────────────────────────────────────────
-# LOAD MODEL FROM HUGGING FACE (CACHE)
-# ─────────────────────────────────────────────
+# 🚀 Load model safely
 @st.cache_resource
 def load_model():
     model_path = hf_hub_download(
         repo_id=HF_MODEL_REPO,
         filename=HF_MODEL_FILE
     )
-    model = tf.keras.models.load_model(model_path)
+
+    # ⚠️ critical fix: compile=False avoids Keras deserialization issues
+    model = tf.keras.models.load_model(model_path, compile=False)
     return model
 
 model = load_model()
 
-# ─────────────────────────────────────────────
-# UI HEADER
-# ─────────────────────────────────────────────
-st.title("🧠 Brain Tumor Classifier")
-st.caption("Upload MRI image and get AI prediction (Powered by Hugging Face + TensorFlow)")
-st.divider()
+# 🧼 preprocessing
+def preprocess_image(img):
+    img = img.convert("RGB")
+    img = img.resize((224, 224))  # match your training size
+    img = np.array(img).astype("float32") / 255.0
+    img = np.expand_dims(img, axis=0)
+    return img
 
-# ─────────────────────────────────────────────
-# UPLOAD IMAGE
-# ─────────────────────────────────────────────
-uploaded_file = st.file_uploader(
-    "Upload MRI Image",
-    type=["jpg", "jpeg", "png"]
-)
+# 🎨 UI
+st.title("🧠 Brain Tumor Detection")
+st.write("Upload an MRI image and the model will predict the result.")
 
-# ─────────────────────────────────────────────
-# PREDICTION
-# ─────────────────────────────────────────────
-if uploaded_file:
+uploaded_file = st.file_uploader("Upload MRI Image", type=["jpg", "jpeg", "png"])
 
-    image = Image.open(uploaded_file).convert("RGB")
+if uploaded_file is not None:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Uploaded Image", use_container_width=True)
 
-    st.image(image, caption="Uploaded MRI", use_container_width=True)
+    processed = preprocess_image(image)
 
-    # preprocess
-    img = image.resize((IMG_SIZE, IMG_SIZE))
-    img_array = np.array(img, dtype=np.float32) / 255.0
-    img_array = np.expand_dims(img_array, axis=0)
+    with st.spinner("Analyzing scan..."):
+        prediction = model.predict(processed)
 
-    # prediction
-    with st.spinner("Analyzing MRI... 🧠"):
-        preds = model.predict(img_array, verbose=0)[0]
+    st.subheader("Prediction Output")
 
-    idx = np.argmax(preds)
-    label = CLASS_NAMES[idx]
-    confidence = float(preds[idx]) * 100
+    st.write(prediction)
 
-    st.divider()
-
-    # result
-    result = "No Tumor" if label == "notumor" else label.capitalize()
-
-    if label == "notumor":
-        st.success(f"✅ {result} — {confidence:.2f}% confidence")
+    # optional: simple interpretation (adjust based on your model output)
+    if prediction.shape[-1] == 1:
+        label = "Tumor Detected 🚨" if prediction[0][0] > 0.5 else "No Tumor ✅"
+        st.success(label)
     else:
-        st.error(f"🔴 {result} Detected — {confidence:.2f}% confidence")
-
-    # probabilities
-    st.subheader("📊 Class Probabilities")
-
-    for i, c in enumerate(CLASS_NAMES):
-        name = "No Tumor" if c == "notumor" else c.capitalize()
-        st.write(f"{name}: {preds[i]*100:.2f}%")
-        st.progress(float(preds[i]))
-
-# ─────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────
-st.divider()
-st.caption("⚠️ Educational purpose only. Not a medical diagnostic tool.")
+        st.info("Model output received (multi-class). Check raw values above.")
