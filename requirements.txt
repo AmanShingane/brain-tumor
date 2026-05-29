@@ -1,7 +1,7 @@
 streamlit==1.35.0
 tensorflow==2.12.0
 numpy==1.23.5
-pillow==10.4.0
+pillow
 huggingface_hub
-h5py==3.14.0
-protobuf==4.25.9
+h5py
+protobuf
