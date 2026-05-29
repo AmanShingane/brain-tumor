@@ -1,83 +1,100 @@
+import os
 import streamlit as st
 import numpy as np
 from PIL import Image
 import tensorflow as tf
-import os
- 
+from huggingface_hub import hf_hub_download
+
+# ─────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Brain Tumor Classifier",
     page_icon="🧠",
-    layout="centered",
+    layout="centered"
 )
- 
-# ── Constants ────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────
+# CONSTANTS
+# ─────────────────────────────────────────────
 CLASS_NAMES = ["glioma", "meningioma", "notumor", "pituitary"]
-IMG_SIZE    = 224
- 
-MODELS = {
-    "Custom CNN":   "my_model.h5",
-    "VGG16":        "VGG16_model.keras",
-    "MobileNetV2":  "mobile_model.keras",
-}
- 
-# ── Load model ───────────────────────────────────────────────────
+IMG_SIZE = 224
+
+# 👉 CHANGE THIS TO YOUR HF MODEL REPO
+HF_MODEL_REPO = "inosukeo1/vg16_tumor"
+HF_MODEL_FILE = "mobile_model.keras"
+
+# ─────────────────────────────────────────────
+# LOAD MODEL FROM HUGGING FACE (CACHE)
+# ─────────────────────────────────────────────
 @st.cache_resource
-def load_model(path):
-    if not os.path.exists(path):
-        return None
-    return tf.keras.models.load_model(path)
- 
-# ── UI ───────────────────────────────────────────────────────────
+def load_model():
+    model_path = hf_hub_download(
+        repo_id=HF_MODEL_REPO,
+        filename=HF_MODEL_FILE
+    )
+    model = tf.keras.models.load_model(model_path)
+    return model
+
+model = load_model()
+
+# ─────────────────────────────────────────────
+# UI HEADER
+# ─────────────────────────────────────────────
 st.title("🧠 Brain Tumor Classifier")
-st.caption("Upload an MRI scan to classify it into one of four categories.")
+st.caption("Upload MRI image and get AI prediction (Powered by Hugging Face + TensorFlow)")
 st.divider()
- 
-model_choice = st.selectbox("Select Model", list(MODELS.keys()))
-model_file   = MODELS[model_choice]
-model        = load_model(model_file)
- 
-if model is None:
-    st.error(f"Model file `{model_file}` not found. Place it in the same folder as app.py.")
-    st.stop()
- 
-uploaded = st.file_uploader("Upload MRI Image", type=["jpg", "jpeg", "png"])
- 
-if uploaded:
-    image = Image.open(uploaded).convert("RGB")
-    st.image(image, caption="Uploaded MRI Scan", use_container_width=True)
- 
-    # Preprocess
-    img_array = np.array(image.resize((IMG_SIZE, IMG_SIZE)), dtype=np.float32)
+
+# ─────────────────────────────────────────────
+# UPLOAD IMAGE
+# ─────────────────────────────────────────────
+uploaded_file = st.file_uploader(
+    "Upload MRI Image",
+    type=["jpg", "jpeg", "png"]
+)
+
+# ─────────────────────────────────────────────
+# PREDICTION
+# ─────────────────────────────────────────────
+if uploaded_file:
+
+    image = Image.open(uploaded_file).convert("RGB")
+
+    st.image(image, caption="Uploaded MRI", use_container_width=True)
+
+    # preprocess
+    img = image.resize((IMG_SIZE, IMG_SIZE))
+    img_array = np.array(img, dtype=np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
- 
-    with st.spinner("Classifying..."):
-        preds     = model.predict(img_array, verbose=0)[0]
-        pred_idx  = int(np.argmax(preds))
-        pred_name = CLASS_NAMES[pred_idx]
-        confidence = float(preds[pred_idx]) * 100
- 
+
+    # prediction
+    with st.spinner("Analyzing MRI... 🧠"):
+        preds = model.predict(img_array, verbose=0)[0]
+
+    idx = np.argmax(preds)
+    label = CLASS_NAMES[idx]
+    confidence = float(preds[idx]) * 100
+
     st.divider()
- 
-    # Result
-    label = "No Tumor" if pred_name == "notumor" else pred_name.capitalize()
-    if pred_name == "notumor":
-        st.success(f"✅ **{label}** — {confidence:.1f}% confidence")
+
+    # result
+    result = "No Tumor" if label == "notumor" else label.capitalize()
+
+    if label == "notumor":
+        st.success(f"✅ {result} — {confidence:.2f}% confidence")
     else:
-        st.error(f"🔴 **{label} Detected** — {confidence:.1f}% confidence")
- 
-    # All probabilities
-    st.subheader("Class Probabilities")
-    for i, name in enumerate(CLASS_NAMES):
-        disp = "No Tumor" if name == "notumor" else name.capitalize()
-        st.text(disp)
-        st.progress(float(preds[i]), text=f"{preds[i]*100:.1f}%")
- 
-    # Metrics
-    st.divider()
-    cols = st.columns(4)
-    for col, i in zip(cols, range(4)):
-        disp = "No Tumor" if CLASS_NAMES[i] == "notumor" else CLASS_NAMES[i].capitalize()
-        col.metric(disp, f"{preds[i]*100:.1f}%")
- 
+        st.error(f"🔴 {result} Detected — {confidence:.2f}% confidence")
+
+    # probabilities
+    st.subheader("📊 Class Probabilities")
+
+    for i, c in enumerate(CLASS_NAMES):
+        name = "No Tumor" if c == "notumor" else c.capitalize()
+        st.write(f"{name}: {preds[i]*100:.2f}%")
+        st.progress(float(preds[i]))
+
+# ─────────────────────────────────────────────
+# FOOTER
+# ─────────────────────────────────────────────
 st.divider()
-st.caption("⚠️ For educational use only. Not a substitute for professional medical diagnosis.")
+st.caption("⚠️ Educational purpose only. Not a medical diagnostic tool.")
