@@ -8,7 +8,7 @@ st.set_page_config(page_title="Brain Tumor Detector 🧠", layout="centered")
 
 # 🔗 HF model info
 HF_MODEL_REPO = "inosukeo1/vg16_tumor"
-HF_MODEL_FILE = "mobile_model.keras"   # IMPORTANT: match your repo file name
+HF_MODEL_FILE = "model.h5"   # IMPORTANT: match your repo file name
 
 # 🚀 Load model safely
 @st.cache_resource
