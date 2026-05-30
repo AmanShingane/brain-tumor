@@ -39,7 +39,7 @@ CLASS_INFO = {
 # ─── Model Loading ────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_model():
-    model_path = hf_hub_download(repo_id=HF_REPO_ID, filename=HF_FILENAME,token=st.secrets["HF_TOKEN"]))
+    model_path = hf_hub_download(repo_id=HF_REPO_ID, filename=HF_FILENAME,token=st.secrets["HF_TOKEN"])
     model = tf.keras.models.load_model(model_path)
     return model
 
